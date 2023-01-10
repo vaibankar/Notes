@@ -54,3 +54,5 @@ variable "u5" {
   default = "devops"
   
 }
+===============================================================================
+TASK = 2 (create ec2 instance and add 2 security group for same instance)
