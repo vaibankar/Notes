@@ -319,3 +319,107 @@ EOF
 =================================================================
 
 TASK 6 = (jenkins setup with user daatabase in terraform)
+-------------------------------------------------------------
+resource "aws_vpc" "main" {
+  cidr_block       = "10.0.0.0/18"
+  instance_tenancy = "default"
+
+  tags = {
+    Name = "main"
+  }
+}
+resource "aws_subnet" "private" {
+  vpc_id     = aws_vpc.main.id
+  cidr_block = "10.0.16.0/20"
+
+  tags = {
+    Name = "private"
+  }
+}
+resource "aws_subnet" "public" {
+  vpc_id     = aws_vpc.main.id
+  cidr_block = "10.0.32.0/20"
+   map_public_ip_on_launch = true
+  tags = {
+    Name = "public"
+  }
+}
+resource "aws_internet_gateway" "gw" {
+  vpc_id = aws_vpc.main.id
+
+  tags = {
+    Name = "main"
+  }
+}
+resource "aws_route_table" "example" {
+  vpc_id = aws_vpc.main.id
+
+  route {
+    cidr_block = "0.0.0.0/0"
+    gateway_id = aws_internet_gateway.gw.id
+  }
+}
+resource "aws_instance" "main_intance" {
+    ami = "ami-03df6dea56f8aa618"
+    instance_type = "t3.micro"
+    subnet_id = "${aws_subnet.public.id}"
+    vpc_security_group_ids = ["${aws_security_group.pk.id}"]
+    key_name = "my-key" 
+}
+resource "aws_main_route_table_association" "a" {
+  vpc_id         = "${aws_vpc.main.id}"
+  route_table_id = "${aws_route_table.example.id}"
+}
+resource "aws_security_group" "pk" {
+  name        = "securitygroup"
+  description = "nothing"
+  vpc_id      = aws_vpc.main.id
+
+  ingress {
+    description      = "TLS from VPC"
+    from_port        = 443
+    to_port          = 443
+    protocol         = "tcp"
+    cidr_blocks      = [aws_vpc.main.cidr_block]
+  } 
+  
+  ingress {
+    description      = "TLS from VPC"
+    from_port        = 80
+    to_port          = 80
+    protocol         = "tcp"
+    cidr_blocks      = [aws_vpc.main.cidr_block]
+    
+  }
+  ingress {
+    description      = "TLS from VPC"
+    from_port        = 22
+    to_port          = 22
+    protocol         = "tcp"
+    cidr_blocks      = [aws_vpc.main.cidr_block]
+    
+  }
+
+  egress {
+    from_port        = 0
+    to_port          = 0
+    protocol         = "-1"
+    cidr_blocks      = ["0.0.0.0/0"]
+  }
+
+  tags = {
+    Name = "allow_tls"
+  }
+}
+resource "aws_key_pair" "my-key" {
+  key_name   = "my-key"
+  public_key = tls_private_key.rsa.public_key_openssh
+}
+resource "tls_private_key" "rsa" {
+  algorithm = "RSA"
+  rsa_bits  = 4096
+}
+resource "local_file" "my-key" {
+  content  = tls_private_key.rsa.private_key_pem
+  filename = "my-key"
+}
